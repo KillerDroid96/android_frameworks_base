@@ -68,6 +68,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     private StatusBar mStatusBarComponent;
     private DarkIconManager mDarkIconManager;
     private SignalClusterView mSignalClusterView;
+    private LinearLayout mCenterClockLayout;
 
     private int mTickerEnabled;
     private TickerObserver mTickerObserver;
@@ -150,6 +151,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         Dependency.get(StatusBarIconController.class).addIconGroup(mDarkIconManager);
         mSystemIconArea = mStatusBar.findViewById(R.id.system_icon_area);
         mSignalClusterView = mStatusBar.findViewById(R.id.signal_cluster);
+        mCenterClockLayout = (LinearLayout) mStatusBar.findViewById(R.id.center_clock_layout);
         Dependency.get(DarkIconDispatcher.class).addDarkReceiver(mSignalClusterView);
         mCustomCarrierLabel = mStatusBar.findViewById(R.id.statusbar_carrier_text);
         updateSettings(false);
@@ -258,18 +260,21 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
 
     public void hideSystemIconArea(boolean animate) {
         animateHide(mSystemIconArea, animate, true);
+        animateHide(mCenterClockLayout, animate, true);
     }
 
     public void showSystemIconArea(boolean animate) {
         animateShow(mSystemIconArea, animate);
+        animateShow(mCenterClockLayout, animate);
     }
 
      public void hideNotificationIconArea(boolean animate) {
         animateHide(mNotificationIconAreaInner, animate, true);
-    }
 
-    public void showNotificationIconArea(boolean animate) {
-        animateShow(mNotificationIconAreaInner, animate);
+        if (mShowLogo) {
+            animateHide(mCustomCarrierLabel, animate, true);
+        animateHide(mCenterClockLayout, animate, true);
+        }
     }
 
     public void hideCarrierName(boolean animate) {
@@ -281,6 +286,9 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     public void showCarrierName(boolean animate) {
         if (mCustomCarrierLabel != null) {
             setCarrierLabel(animate);
+        if (mShowLogo) {
+            animateShow(mCustomCarrierLabel, animate);
+        animateShow(mCenterClockLayout, animate);
         }
     }
 
