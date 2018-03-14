@@ -16,6 +16,22 @@
 -->
 <resources>
 
+  <!-- Updater snackbar text color -->
+  <java-symbol type="color" name="updater_snackbar_text_color" />
+
+  <!-- Power menu items -->
+  <java-symbol type="color" name="power_menu_power_off" />
+  <java-symbol type="color" name="power_menu_restart" />
+  <java-symbol type="color" name="power_menu_restart_advanced" />
+  <java-symbol type="color" name="power_menu_hot_reboot" />
+  <java-symbol type="color" name="power_menu_advanced_bootloader" />
+  <java-symbol type="color" name="power_menu_advanced_recovery" />
+  <java-symbol type="color" name="power_menu_advanced_system_restart_ui" />
+  <java-symbol type="color" name="power_menu_screenshot" />
+
+  <!-- Notification info -->
+  <java-symbol type="color" name="notification_info_button_text" />
+
   <!-- IMS -->
   <java-symbol type="string" name="config_optionalPackageVerifierName" />
   <java-symbol type="integer" name="config_sms_authorization_timeout_ms" />
@@ -91,5 +107,24 @@
 
   <!-- Ambient music -->
   <java-symbol type="bool" name="config_canForceDozeNotifications" />
+
+  <!-- Notification icon/text dynamic tint -->
+  <java-symbol type="bool" name="config_allowNotificationIconTextTinting" />
+  <java-symbol type="color" name="notification_text_default_color" />
+
+  <!-- Notification sender text color -->
+  <java-symbol type="color" name="sender_text_color" />
+
+  <!-- In call notification vibration strength -->
+  <java-symbol type="integer" name="config_in_call_notification_vibration_strength" />
+
+  <!-- Slim recent app screen-->
+  <java-symbol type="integer" name="config_recentDefaultDur" />
+  <java-symbol type="style" name="Animation.SlimRecentScreen" />
+  <java-symbol type="anim" name="recent_screen_fade_out" />
+  <java-symbol type="anim" name="recent_enter" />
+
+  <!-- Whether device has turbo power charging support -->
+  <java-symbol type="bool" name="config_hasTurboPowerCharger" />
 
 </resources>

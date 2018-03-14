@@ -19,9 +19,16 @@
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
 
     <!-- Show lte/4g switch -->
-    <string name="show_lte_fourgee_title">4G/LTE network icon</string>
+    <string name="show_lte_fourgee_title">4G/LTE network</string>
     <string name="show_lte_fourgee_summary">Display either the 4G or LTE network icon in the statusbar/QS panel</string>
-    <string name="statusbar_tuner_category_title">Hide items from statusbar</string>
+    <string name="statusbar_tuner_category_title">Generic statusbar icons</string>
+
+    <!-- Roaming indicator -->
+    <string name="roaming_indicator_title">Roaming</string>
+
+    <!-- DU logo -->
+    <string name="du_logo_title">DU swag</string>
+    <string name="du_logo_summary">Let everyone know that you\'re using DU when they see your screen</string>
 
     <!-- Power menu -->
     <string name="global_action_restart_system">Reboot</string>
@@ -52,6 +59,7 @@
     <string name="lockscreen_hidden">None</string>
     <string name="custom_hint">Swipe from icon to launch</string>
     <string name="systemui_tuner_navbar_title">Stock settings</string>
+    <string name="status_bar_vpn">VPN</string>
 
     <!-- QS Tiles -->
     <string name="quick_settings_reboot_label">Reboot</string>
@@ -61,8 +69,55 @@
     <string name="quick_settings_caffeine_label">Caffeine</string>
     <string name="accessibility_quick_settings_caffeine_off">Caffeine off</string>
     <string name="accessibility_quick_settings_caffeine_on">Caffeine on</string>
+    <string name="caffeine_info_title">What is this?</string>
+    <string name="caffeine_info_message">The Caffeine tile is a simple tile that you could switch on to keep your screen on after being idle.\n\nPlease note that the tile\'s state will reset itself after turning the screen off.</string>
+    <string name="theme_info_title">What is this?</string>
+    <string name="theme_info_message">The Themes tile is a unique but easy to use tile that allows the user to change the system accent or style.\n\nTo change between accents and styles, simply long press on the tile and then press again to select from the options offered.</string>
 
     <!-- QS customizer -->
     <string name="drag_or_tap_to_add_tiles">Drag or tap to add tiles</string>
+
+    <!-- Navigation bar Tile -->
+    <string name="quick_settings_navigation_bar">Navigation bar</string>
+    <string name="quick_settings_smartbar">SmartBar</string>
+    <string name="quick_settings_fling">Fling</string>
+    <string name="quick_settings_navigation_default">Stock</string>
+    <string name="quick_settings_navigation_disabled">Disabled</string>
+
+    <!-- Theme tile -->
+    <string name="systemui_theme_style_title">Style</string>
+    <string name="systemui_theme_style_auto">Automatic</string>
+    <string name="systemui_theme_style_light">Light</string>
+    <string name="systemui_theme_style_dark">Dark</string>
+    <string name="quick_settings_theme_tile_title">Accent</string>
+    <string name="quick_settings_theme_tile_accent_detail_title">Select color</string>
+    <string name="quick_settings_theme_tile_style_detail_title">Select style</string>
+    <string name="quick_settings_theme_tile_color_default">Default</string>
+    <string name="quick_settings_theme_tile_color_red">Red</string>
+    <string name="quick_settings_theme_tile_color_pink">Pink</string>
+    <string name="quick_settings_theme_tile_color_purple">Purple</string>
+    <string name="quick_settings_theme_tile_color_deep_purple">Deep purple</string>
+    <string name="quick_settings_theme_tile_color_indigo">Indigo</string>
+    <string name="quick_settings_theme_tile_color_blue">Blue</string>
+    <string name="quick_settings_theme_tile_color_light_blue">Light blue</string>
+    <string name="quick_settings_theme_tile_color_cyan">Cyan</string>
+    <string name="quick_settings_theme_tile_color_teal">Teal</string>
+    <string name="quick_settings_theme_tile_color_green">Green</string>
+    <string name="quick_settings_theme_tile_color_light_green">Light green</string>
+    <string name="quick_settings_theme_tile_color_lime">Lime</string>
+    <string name="quick_settings_theme_tile_color_yellow">Yellow</string>
+    <string name="quick_settings_theme_tile_color_amber">Amber</string>
+    <string name="quick_settings_theme_tile_color_orange">Orange</string>
+    <string name="quick_settings_theme_tile_color_deep_orange">Deep orange</string>
+    <string name="quick_settings_theme_tile_color_brown">Brown</string>
+    <string name="quick_settings_theme_tile_color_grey">Grey</string>
+    <string name="quick_settings_theme_tile_color_blue_grey">Blue grey</string>
+    <string name="quick_settings_theme_tile_color_black">Black</string>
+    <string name="quick_settings_theme_tile_color_white">White</string>
+
+    <!-- Indication on the keyguard that is shown when the device is charging with a turbo power charger. Should match keyguard_plugged_in_turbo_power_charging [CHAR LIMIT=40]-->
+    <string name="keyguard_indication_turbo_power_time">TurboPower connected (<xliff:g id="charging_time_left">%s</xliff:g> until full)</string>
+    <string name="keyguard_plugged_in_turbo_power_charging">TurboPower connected</string>
+    <string name="keyguard_plugged_in_turbo_charging">Turbo Charging</string>
 
 </resources>

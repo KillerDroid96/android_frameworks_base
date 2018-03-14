@@ -20,15 +20,14 @@ import static android.app.ActivityManager.StackId.INVALID_STACK_ID;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.animation.ValueAnimator.AnimatorUpdateListener;
 import android.app.ActivityOptions.OnAnimationStartedListener;
 import android.content.Context;
-import android.content.ContentResolver;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
-import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Point;
@@ -36,10 +35,8 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.UserHandle;
-import android.os.Handler;
 import android.provider.Settings;
 import android.util.ArraySet;
 import android.util.AttributeSet;
@@ -48,6 +45,8 @@ import android.view.Gravity;
 import android.view.AppTransitionAnimationSpec;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+import android.view.ScaleGestureDetector.SimpleOnScaleGestureListener;
 import android.view.View;
 import android.view.ViewAnimationUtils;
 import android.view.ViewDebug;
@@ -71,6 +70,7 @@ import com.android.systemui.recents.RecentsActivityLaunchState;
 import com.android.systemui.recents.RecentsConfiguration;
 import com.android.systemui.recents.RecentsDebugFlags;
 import com.android.systemui.recents.events.EventBus;
+import com.android.systemui.recents.events.activity.ConfigurationChangedEvent;
 import com.android.systemui.recents.events.activity.DismissRecentsToHomeAnimationStarted;
 import com.android.systemui.recents.events.activity.DockedFirstAnimationFrameEvent;
 import com.android.systemui.recents.events.activity.EnterRecentsWindowAnimationCompletedEvent;
@@ -125,11 +125,8 @@ public class RecentsView extends FrameLayout {
     private final PointF mStackButtonShadowDistance;
     private final int mStackButtonShadowColor;
 
-    private SettingsObserver mSettingsObserver;
-    private boolean showClearAllRecents;
-    View mFloatingButton;
-    View mClearRecents;
-    private int clearRecentsLocation;
+    private View mFloatingButtonView;
+    private View mClearRecents;
 
     private boolean mAwaitingFirstLayout = true;
     private boolean mLastTaskLaunchedWasFreeform;
@@ -150,10 +147,14 @@ public class RecentsView extends FrameLayout {
         mMultiWindowBackgroundScrim.setAlpha(alpha);
     };
 
+    private ScaleGestureDetector mRecentListGestureDetector;
+
     private RecentsTransitionHelper mTransitionHelper;
     @ViewDebug.ExportedProperty(deepExport=true, prefix="touch_")
     private RecentsViewTouchHandler mTouchHandler;
     private final FlingAnimationUtils mFlingAnimationUtils;
+
+    private int mDisplayOrientation = Configuration.ORIENTATION_UNDEFINED;
 
     public RecentsView(Context context) {
         this(context, null);
@@ -182,7 +183,6 @@ public class RecentsView extends FrameLayout {
         LayoutInflater inflater = LayoutInflater.from(context);
         mEmptyView = (TextView) inflater.inflate(R.layout.recents_empty, this, false);
         addView(mEmptyView);
-        mSettingsObserver = new SettingsObserver(new Handler());
 
         if (RecentsDebugFlags.Static.EnableStackActionButton) {
             if (mStackActionButton != null) {
@@ -318,6 +318,11 @@ public class RecentsView extends FrameLayout {
         }
     }
 
+    private boolean isShowClearAllRecents() {
+        return Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.SHOW_CLEAR_ALL_RECENTS, 0, UserHandle.USER_CURRENT) != 0;
+    }
+
     /**
      * Returns the current TaskStack.
      */
@@ -402,6 +407,10 @@ public class RecentsView extends FrameLayout {
         return false;
     }
 
+    public void setFloatingButtonView(View floatingButtonView) {
+        mFloatingButtonView = floatingButtonView;
+    }
+
     /**
      * Hides the task stack and shows the empty view.
      */
@@ -413,9 +422,7 @@ public class RecentsView extends FrameLayout {
         if (RecentsDebugFlags.Static.EnableStackActionButton) {
             mStackActionButton.bringToFront();
         }
-        if (mFloatingButton != null) {
-            mFloatingButton.setVisibility(View.GONE);
-        }
+        mFloatingButtonView.setVisibility(View.GONE);
     }
 
     /**
@@ -425,12 +432,15 @@ public class RecentsView extends FrameLayout {
         mEmptyView.setVisibility(View.INVISIBLE);
         mTaskStackView.setVisibility(View.VISIBLE);
         mTaskStackView.bringToFront();
+        // Prepare gesture detector.
+        mTaskStackView.setOnTouchListener((View v, MotionEvent event) -> {
+            mRecentListGestureDetector.onTouchEvent(event);
+            return false;
+        });
         if (RecentsDebugFlags.Static.EnableStackActionButton) {
             mStackActionButton.bringToFront();
         }
-        if (mFloatingButton != null) {
-            mFloatingButton.setVisibility(View.VISIBLE);
-        }
+        mFloatingButtonView.setVisibility(View.VISIBLE);
     }
 
     /**
@@ -449,8 +459,7 @@ public class RecentsView extends FrameLayout {
     public void startFABanimation() {
         RecentsConfiguration config = Recents.getConfiguration();
         // Animate the action button in
-        mFloatingButton = ((View)getParent()).findViewById(R.id.floating_action_button);
-        mFloatingButton.animate().alpha(1f)
+        mFloatingButtonView.animate().alpha(1f)
                 .setStartDelay(config.fabEnterAnimDelay)
                 .setDuration(config.fabEnterAnimDuration)
                 .setInterpolator(Interpolators.ALPHA_IN)
@@ -461,8 +470,7 @@ public class RecentsView extends FrameLayout {
     public void endFABanimation() {
         RecentsConfiguration config = Recents.getConfiguration();
         // Animate the action button away
-        mFloatingButton = ((View)getParent()).findViewById(R.id.floating_action_button);
-        mFloatingButton.animate().alpha(0f)
+        mFloatingButtonView.animate().alpha(0f)
                 .setStartDelay(0)
                 .setDuration(config.fabExitAnimDuration)
                 .setInterpolator(Interpolators.ALPHA_OUT)
@@ -474,13 +482,16 @@ public class RecentsView extends FrameLayout {
     protected void onAttachedToWindow() {
         EventBus.getDefault().register(this, RecentsActivity.EVENT_BUS_PRIORITY + 1);
         EventBus.getDefault().register(mTouchHandler, RecentsActivity.EVENT_BUS_PRIORITY + 2);
-        mSettingsObserver.observe();
+        mClearRecents = (ImageButton) ((View)getParent()).findViewById(R.id.clear_recents);
         mClearRecents.setVisibility(View.VISIBLE);
         mClearRecents.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-            EventBus.getDefault().send(new DismissAllTaskViewsEvent());
+                EventBus.getDefault().send(new DismissAllTaskViewsEvent());
             }
         });
+        mRecentListGestureDetector =
+                new ScaleGestureDetector(mContext,
+                        new PinchInGesture(mTaskStackView));
         super.onAttachedToWindow();
     }
 
@@ -489,7 +500,6 @@ public class RecentsView extends FrameLayout {
         super.onDetachedFromWindow();
         EventBus.getDefault().unregister(this);
         EventBus.getDefault().unregister(mTouchHandler);
-        mSettingsObserver.unobserve();
     }
 
     /**
@@ -518,23 +528,12 @@ public class RecentsView extends FrameLayout {
                     MeasureSpec.makeMeasureSpec(buttonBounds.height(), MeasureSpec.AT_MOST));
         }
 
-        setMeasuredDimension(width, height);
-
-        if (mFloatingButton != null && showClearAllRecents) {
-            clearRecentsLocation = Settings.System.getIntForUser(
-                mContext.getContentResolver(), Settings.System.RECENTS_CLEAR_ALL_LOCATION,
-                3, UserHandle.USER_CURRENT);
+        if (isShowClearAllRecents()) {
+            int clearRecentsLocation = Settings.System.getIntForUser(mContext.getContentResolver(),
+                    Settings.System.RECENTS_CLEAR_ALL_LOCATION,
+                    3, UserHandle.USER_CURRENT);
             FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)
-                    mFloatingButton.getLayoutParams();
-            boolean isLandscape = mContext.getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE;
-            if (isLandscape) {
-                params.topMargin = mContext.getResources().
-                      getDimensionPixelSize(com.android.internal.R.dimen.status_bar_height);
-            } else {
-                params.topMargin = 2*(mContext.getResources().
-                    getDimensionPixelSize(com.android.internal.R.dimen.status_bar_height));
-            }
+                    mFloatingButtonView.getLayoutParams();
             switch (clearRecentsLocation) {
                 case 0:
                     params.gravity = Gravity.TOP | Gravity.RIGHT;
@@ -556,13 +555,14 @@ public class RecentsView extends FrameLayout {
                     params.gravity = Gravity.BOTTOM | Gravity.CENTER;
                     break;
             }
-            mFloatingButton.setLayoutParams(params);
+            mStackActionButton.setVisibility(View.GONE);
+            mFloatingButtonView.setLayoutParams(params);
         } else {
-            mFloatingButton.setVisibility(View.GONE);
+            mFloatingButtonView.setVisibility(View.GONE);
+            mStackActionButton.setVisibility(View.VISIBLE);
         }
-        LayoutInflater inflater = LayoutInflater.from(mContext);
-        float cornerRadius = mContext.getResources().getDimensionPixelSize(
-                    R.dimen.recents_task_view_rounded_corners_radius);
+
+        setMeasuredDimension(width, height);
     }
 
     /**
@@ -661,6 +661,12 @@ public class RecentsView extends FrameLayout {
     }
 
     /**** EventBus Events ****/
+
+    public final void onBusEvent(ConfigurationChangedEvent event) {
+        if (event.fromDeviceOrientationChange) {
+            mDisplayOrientation = Utilities.getAppConfiguration(mContext).orientation;
+        }
+    }
 
     public final void onBusEvent(LaunchTaskEvent event) {
         mLastTaskLaunchedWasFreeform = event.task.isFreeformTask();
@@ -881,7 +887,7 @@ public class RecentsView extends FrameLayout {
         if (!RecentsDebugFlags.Static.EnableStackActionButton) {
             return;
         }
-        if (showClearAllRecents) {
+        if (isShowClearAllRecents()) {
             return;
         }
         final ReferenceCountedTrigger postAnimationTrigger = new ReferenceCountedTrigger();
@@ -1099,33 +1105,109 @@ public class RecentsView extends FrameLayout {
         }
     }
 
-    class SettingsObserver extends ContentObserver {
-         SettingsObserver(Handler handler) {
-             super(handler);
-         }
+    /**
+    * Extended SimpleOnScaleGestureListener to take
+    * care of a pinch to zoom out gesture. This class
+    * takes as well care on a bunch of animations which are needed
+    * to control the final action.
+    */
+    private class PinchInGesture extends SimpleOnScaleGestureListener {
 
-         void observe() {
-             ContentResolver resolver = mContext.getContentResolver();
-             resolver.registerContentObserver(Settings.System.getUriFor(
-                     Settings.System.SHOW_CLEAR_ALL_RECENTS), false, this, UserHandle.USER_ALL);
-             update();
-         }
+        // Constants for scaling max/min values
+        private final static float MAX_SCALING_FACTOR       = 1.0f;
+        private final static float MIN_SCALING_FACTOR       = 0.5f;
+        private final static float MIN_ALPHA_SCALING_FACTOR = 0.55f;
+        private final static float MIN_ALPHA_SCALING_FACTOR_LANDSCAPE = 0.75f;
 
-         void unobserve() {
-             ContentResolver resolver = mContext.getContentResolver();
-             resolver.unregisterContentObserver(this);
-         }
+        private final static int ANIMATION_FADE_IN_DURATION  = 400;
+        private final static int ANIMATION_FADE_OUT_DURATION = 300;
 
-         @Override
-         public void onChange(boolean selfChange, Uri uri) {
-             update();
-         }
+        private float mScalingFactor = MAX_SCALING_FACTOR;
+        private boolean mActionDetected;
 
-         public void update() {
-             mFloatingButton = ((View)getParent()).findViewById(R.id.floating_action_button);
-             mClearRecents = (ImageButton) ((View)getParent()).findViewById(R.id.clear_recents);
-             showClearAllRecents = Settings.System.getIntForUser(mContext.getContentResolver(),
-                     Settings.System.SHOW_CLEAR_ALL_RECENTS, 0, UserHandle.USER_CURRENT) != 0;
-         }
-     }
+        // View we need and is passed trough the constructor.
+        private View mRecentTasksView;
+
+        public PinchInGesture(View taskStackView) {
+            mRecentTasksView = taskStackView;
+        }
+
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            // Get gesture scaling factor and calculate the values we need
+            mScalingFactor *= detector.getScaleFactor();
+            mScalingFactor = Math.max(MIN_SCALING_FACTOR,
+                    Math.min(mScalingFactor, MAX_SCALING_FACTOR));
+            final float alphaValue = Math.max(MIN_ALPHA_SCALING_FACTOR,
+                    Math.min(mScalingFactor, MAX_SCALING_FACTOR));
+
+            // Reset detection value.
+            mActionDetected = false;
+
+            // Set alpha value for content.
+            mRecentTasksView.setAlpha(alphaValue);
+
+            // Check if we are under MIN_ALPHA_SCALING_FACTOR
+            boolean isLandscape =
+                    mDisplayOrientation == Configuration.ORIENTATION_LANDSCAPE;
+            // Make the gesture easier to trigger on landscape where we have smaller space
+            if (mScalingFactor < (!isLandscape ? MIN_ALPHA_SCALING_FACTOR
+                    : MIN_ALPHA_SCALING_FACTOR_LANDSCAPE)) {
+                mActionDetected = true;
+            }
+            return true;
+        }
+
+        @Override
+        public boolean onScaleBegin(ScaleGestureDetector detector) {
+            return true;
+        }
+
+        @Override
+        public void onScaleEnd(ScaleGestureDetector detector) {
+            super.onScaleEnd(detector);
+            // Reset to default scaling factor to prepare for next gesture.
+            mScalingFactor = MAX_SCALING_FACTOR;
+
+            final float currentAlpha = mRecentTasksView.getAlpha();
+
+            // Gesture was detected and activated. Prepare and play the animations
+            if (mActionDetected) {
+
+                // Setup additional fade out final animation for tasks view.
+                // Quickly restore alpha then go to 0 to create a flash effect
+                ValueAnimator animation1 = ValueAnimator.ofFloat(1.0f, 0.0f);
+                animation1.setDuration(ANIMATION_FADE_OUT_DURATION);
+                animation1.addUpdateListener((ValueAnimator animation) -> {
+                    mRecentTasksView.setAlpha((Float) animation.getAnimatedValue());
+                });
+
+                // Start all ValueAnimator animations
+                // and listen onAnimationEnd to prepare the views for the next call
+                AnimatorSet animationSet = new AnimatorSet();
+                animationSet.play(animation1);
+                animationSet.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        // Animation is finished. Prepare tasks view for next recent call
+                        mRecentTasksView.setVisibility(View.GONE);
+                        mRecentTasksView.setAlpha(1.0f);
+                        // Remove all tasks now
+                        EventBus.getDefault().send(new DismissAllTaskViewsEvent());
+                    }
+                });
+                animationSet.start();
+
+            } else if (currentAlpha < 1.0f) {
+                // No gesture action was detected but we may have a lower alpha
+                // value for the tasks view. Animate back to full opacitiy
+                ValueAnimator restoreAlpha = ValueAnimator.ofFloat(currentAlpha, 1.0f);
+                restoreAlpha.setDuration(100);
+                restoreAlpha.addUpdateListener((ValueAnimator animation) -> {
+                    mRecentTasksView.setAlpha((Float) animation.getAnimatedValue());
+                });
+                restoreAlpha.start();
+            }
+        }
+    }
 }

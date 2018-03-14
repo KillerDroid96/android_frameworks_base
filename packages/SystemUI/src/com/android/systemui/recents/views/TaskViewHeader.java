@@ -54,9 +54,11 @@ import com.android.systemui.recents.Recents;
 import com.android.systemui.recents.events.EventBus;
 import com.android.systemui.recents.events.activity.LaunchTaskEvent;
 import com.android.systemui.recents.events.ui.ShowApplicationInfoEvent;
+import com.android.systemui.slimrecent.icons.IconsHandler;
 import com.android.systemui.recents.misc.SystemServicesProxy;
 import com.android.systemui.recents.misc.Utilities;
 import com.android.systemui.recents.model.Task;
+import com.android.systemui.recents.model.TaskStack;
 
 import static android.app.ActivityManager.StackId.FREEFORM_WORKSPACE_STACK_ID;
 import static android.app.ActivityManager.StackId.FULLSCREEN_WORKSPACE_STACK_ID;
@@ -148,6 +150,7 @@ public class TaskViewHeader extends FrameLayout
     ImageView mMoveTaskButton;
     ImageView mDismissButton;
     ImageView mPinButton;
+    ImageView mLockTaskButton;
     FrameLayout mAppOverlayView;
     ImageView mAppIconView;
     ImageView mAppInfoView;
@@ -173,6 +176,10 @@ public class TaskViewHeader extends FrameLayout
     Drawable mDarkFullscreenIcon;
     Drawable mLightInfoIcon;
     Drawable mDarkInfoIcon;
+    Drawable mLightLockedDrawable;
+    Drawable mLightUnlockedDrawable;
+    Drawable mDarkLockedDrawable;
+    Drawable mDarkUnlockedDrawable;
     int mTaskBarViewLightTextColor;
     int mTaskBarViewDarkTextColor;
     int mDisabledTaskBarBackgroundColor;
@@ -191,6 +198,8 @@ public class TaskViewHeader extends FrameLayout
     private boolean mShouldDarkenBackgroundColor = false;
 
     private CountDownTimer mFocusTimerCountDown;
+
+    private IconsHandler mIconsHandler;
 
     public TaskViewHeader(Context context) {
         this(context, null);
@@ -226,6 +235,11 @@ public class TaskViewHeader extends FrameLayout
         mDarkFullscreenIcon = context.getDrawable(R.drawable.recents_move_task_fullscreen_dark);
         mLightInfoIcon = context.getDrawable(R.drawable.recents_info_light);
         mDarkInfoIcon = context.getDrawable(R.drawable.recents_info_dark);
+        mLightLockedDrawable = context.getDrawable(R.drawable.recents_locked_light);
+        mLightUnlockedDrawable = context.getDrawable(R.drawable.recents_unlocked_light);
+        mDarkLockedDrawable = context.getDrawable(R.drawable.recents_locked_dark);
+        mDarkUnlockedDrawable = context.getDrawable(R.drawable.recents_unlocked_dark);
+
         mDisabledTaskBarBackgroundColor =
                 context.getColor(R.color.recents_task_bar_disabled_background_color);
 
@@ -245,6 +259,10 @@ public class TaskViewHeader extends FrameLayout
         hideAppOverlay(true /* immediate */);
     }
 
+    public void setIconsHandler(IconsHandler ih) {
+        mIconsHandler = ih;
+    }
+
     @Override
     protected void onFinishInflate() {
         SystemServicesProxy ssp = Recents.getSystemServices();
@@ -255,6 +273,7 @@ public class TaskViewHeader extends FrameLayout
         mTitleView = findViewById(R.id.title);
         mDismissButton = findViewById(R.id.dismiss_task);
         mPinButton = findViewById(R.id.lock_to_app_fab);
+        mLockTaskButton = findViewById(R.id.lock_task);
         if (ssp.hasFreeformWorkspaceSupport()) {
             mMoveTaskButton = findViewById(R.id.move_task);
         }
@@ -369,6 +388,7 @@ public class TaskViewHeader extends FrameLayout
         }
         mDismissButton.setVisibility(showDismissIcon ? View.VISIBLE : View.INVISIBLE);
         mDismissButton.setTranslationX(rightInset);
+        mLockTaskButton.setVisibility(showDismissIcon ? View.VISIBLE : View.INVISIBLE);
 
         setLeftTopRightBottom(0, 0, width, getMeasuredHeight());
     }
@@ -464,6 +484,14 @@ public class TaskViewHeader extends FrameLayout
         mShouldDarkenBackgroundColor = flag;
     }
 
+    private void updateLockTaskDrawable() {
+        if (mTask != null) {
+            mLockTaskButton.setImageDrawable(mTask.useLightOnPrimaryColor ?
+                    (Recents.sLockedTasks.contains(mTask) ? mLightLockedDrawable : mLightUnlockedDrawable) :
+                    (Recents.sLockedTasks.contains(mTask) ? mDarkLockedDrawable : mDarkUnlockedDrawable));
+        }
+    }
+
     /**
      * Binds the bar view to the task.
      */
@@ -488,6 +516,10 @@ public class TaskViewHeader extends FrameLayout
         mDismissButton.setOnClickListener(this);
         mDismissButton.setClickable(false);
         ((RippleDrawable) mDismissButton.getBackground()).setForceSoftware(true);
+        updateLockTaskDrawable();
+        mLockTaskButton.setOnClickListener(this);
+        mLockTaskButton.setClickable(false);
+        ((RippleDrawable) mLockTaskButton.getBackground()).setForceSoftware(true);
 
         mPinButton.setImageDrawable(t.useLightOnPrimaryColor ?
                 mLightPinDrawable : mDarkPinDrawable);
@@ -583,6 +615,17 @@ public class TaskViewHeader extends FrameLayout
             mPinButton.setVisibility(View.GONE);
             mPinButton.setClickable(false);
         }
+        mLockTaskButton.setVisibility(View.VISIBLE);
+        mLockTaskButton.setClickable(true);
+        if (mLockTaskButton.getVisibility() == VISIBLE) {
+            mLockTaskButton.animate()
+                    .alpha(1f)
+                    .setInterpolator(Interpolators.FAST_OUT_LINEAR_IN)
+                    .setDuration(duration)
+                    .start();
+        } else {
+            mLockTaskButton.setAlpha(1f);
+        }
         if (mMoveTaskButton != null) {
             if (mMoveTaskButton.getVisibility() == VISIBLE) {
                 mMoveTaskButton.setVisibility(View.VISIBLE);
@@ -619,6 +662,10 @@ public class TaskViewHeader extends FrameLayout
             mPinButton.setVisibility(View.GONE);
             mPinButton.setClickable(false);
         }
+        mLockTaskButton.setVisibility(View.VISIBLE);
+        mLockTaskButton.animate().cancel();
+        mLockTaskButton.setAlpha(1f);
+        mLockTaskButton.setClickable(true);
         if (mMoveTaskButton != null) {
             mMoveTaskButton.setVisibility(View.VISIBLE);
             mMoveTaskButton.animate().cancel();
@@ -640,6 +687,10 @@ public class TaskViewHeader extends FrameLayout
         mPinButton.setVisibility(View.INVISIBLE);
         mPinButton.setAlpha(0f);
         mPinButton.setClickable(false);
+        //Lock Task button
+        mLockTaskButton.setVisibility(View.INVISIBLE);
+        mLockTaskButton.setAlpha(0f);
+        mLockTaskButton.setClickable(false);
         if (mMoveTaskButton != null) {
             mMoveTaskButton.setVisibility(View.INVISIBLE);
             mMoveTaskButton.setAlpha(0f);
@@ -662,11 +713,13 @@ public class TaskViewHeader extends FrameLayout
             EventBus.getDefault().send(new ShowApplicationInfoEvent(mTask));
         } else if (v == mDismissButton) {
             TaskView tv = Utilities.findParent(this, TaskView.class);
-            tv.dismissTask();
+            if (!Recents.sLockedTasks.contains(tv.getTask())) {
+                tv.dismissTask();
 
-            // Keep track of deletions by the dismiss button
-            MetricsLogger.histogram(getContext(), "overview_task_dismissed_source",
-                    Constants.Metrics.DismissSourceHeaderButton);
+                // Keep track of deletions by the dismiss button
+                MetricsLogger.histogram(getContext(), "overview_task_dismissed_source",
+                        Constants.Metrics.DismissSourceHeaderButton);
+            }
         } else if (v == mPinButton) {
             TaskView tv = Utilities.findParent(this, TaskView.class);
             tv.screenPinning();
@@ -678,6 +731,13 @@ public class TaskViewHeader extends FrameLayout
             EventBus.getDefault().send(new ShowApplicationInfoEvent(mTask));
         } else if (v == mAppIconView) {
             hideAppOverlay(false /* immediate */);
+        } else if (v == mLockTaskButton) {
+            if (Recents.sLockedTasks.contains(mTask)) {
+               Recents.sLockedTasks.remove(mTask);
+            } else {
+               Recents.sLockedTasks.add(mTask);
+            }
+            updateLockTaskDrawable();
         }
     }
 
@@ -724,8 +784,14 @@ public class TaskViewHeader extends FrameLayout
         mAppTitleView.setText(ssp.getBadgedApplicationLabel(activityInfo.applicationInfo, userId));
         mAppTitleView.setTextColor(mTask.useLightOnPrimaryColor ?
                 mTaskBarViewLightTextColor : mTaskBarViewDarkTextColor);
-        mAppIconView.setImageDrawable(ssp.getBadgedApplicationIcon(activityInfo.applicationInfo,
-                userId));
+        Drawable icon = null;
+        if (activityInfo != null) {
+            icon = mIconsHandler.getIconFromHandler(mContext, activityInfo);
+        }
+        if (icon == null) {
+            icon = ssp.getBadgedApplicationIcon(activityInfo.applicationInfo, userId);
+        }
+        mAppIconView.setImageDrawable(icon);
         mAppInfoView.setImageDrawable(mTask.useLightOnPrimaryColor
                 ? mLightInfoIcon
                 : mDarkInfoIcon);

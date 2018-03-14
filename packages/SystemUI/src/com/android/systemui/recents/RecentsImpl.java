@@ -89,6 +89,7 @@ import com.android.systemui.recents.views.TaskStackViewScroller;
 import com.android.systemui.recents.views.TaskViewHeader;
 import com.android.systemui.recents.views.TaskViewTransform;
 import com.android.systemui.recents.views.grid.TaskGridLayoutAlgorithm;
+import com.android.systemui.slimrecent.icons.IconsHandler;
 import com.android.systemui.stackdivider.DividerView;
 import com.android.systemui.statusbar.phone.NavigationBarGestureHelper;
 import com.android.systemui.statusbar.phone.StatusBar;
@@ -260,9 +261,14 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
         }
     });
 
-    public RecentsImpl(Context context) {
+    protected boolean mUseSlimRecents;
+
+    private IconsHandler mIconsHandler;
+
+    public RecentsImpl(Context context, IconsHandler ih) {
         mContext = context;
         mHandler = new Handler();
+        mIconsHandler = ih;
         mBackgroundLayoutAlgorithm = new TaskStackLayoutAlgorithm(context, null);
 
         // Initialize the static foreground thread
@@ -292,6 +298,9 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
     }
 
     public void onConfigurationChanged() {
+        if (mUseSlimRecents) {
+            return;
+        }
         reloadResources();
         mDummyStackView.reloadOnConfigurationChange();
         synchronized (mBackgroundLayoutAlgorithm) {
@@ -314,6 +323,9 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
      * {@link Recents#onBusEvent(ScreenPinningRequestEvent)}.
      */
     public void onStartScreenPinning(Context context, int taskId) {
+        if (mUseSlimRecents) {
+            return;
+        }
         SystemUIApplication app = (SystemUIApplication) context;
         StatusBar statusBar = app.getComponent(StatusBar.class);
         if (statusBar != null) {
@@ -324,6 +336,9 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
     public void showRecents(boolean triggeredFromAltTab, boolean draggingInRecents,
             boolean animate, boolean launchedWhileDockingTask, boolean fromHome,
             int growTarget) {
+        if (mUseSlimRecents) {
+            return;
+        }
         mTriggeredFromAltTab = triggeredFromAltTab;
         mDraggingInRecents = draggingInRecents;
         mLaunchedWhileDocking = launchedWhileDockingTask;
@@ -363,6 +378,9 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
     }
 
     public void hideRecents(boolean triggeredFromAltTab, boolean triggeredFromHomeKey) {
+        if (mUseSlimRecents) {
+            return;
+        }
         if (triggeredFromAltTab && mFastAltTabTrigger.isDozing()) {
             // The user has released alt-tab before the trigger has run, so just show the next
             // task immediately
@@ -388,6 +406,9 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
 
         // Skip this toggle if we are already waiting to trigger recents via alt-tab
         if (mFastAltTabTrigger.isDozing()) {
+            return;
+        }
+        if (mUseSlimRecents) {
             return;
         }
 
@@ -463,6 +484,9 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
     }
 
     public void preloadRecents() {
+        if (mUseSlimRecents) {
+            return;
+        }
         // Skip preloading if the task is locked
         SystemServicesProxy ssp = Recents.getSystemServices();
         if (ssp.isScreenPinningActive()) {
@@ -727,6 +751,7 @@ public class RecentsImpl implements ActivityOptions.OnAnimationFinishedListener 
         mHeaderBar = (TaskViewHeader) inflater.inflate(R.layout.recents_task_view_header,
                 null, false);
         mHeaderBar.setLayoutDirection(res.getConfiguration().getLayoutDirection());
+        mHeaderBar.setIconsHandler(mIconsHandler);
     }
 
     private void updateDummyStackViewLayout(TaskStackLayoutAlgorithm stackLayout,

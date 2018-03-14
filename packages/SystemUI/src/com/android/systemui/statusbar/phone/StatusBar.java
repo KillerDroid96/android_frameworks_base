@@ -38,8 +38,10 @@ import android.animation.AnimatorListenerAdapter;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
+import android.app.ActivityManagerNative;
 import android.app.ActivityManager.StackId;
 import android.app.ActivityOptions;
+import android.app.IActivityManager;
 import android.app.INotificationManager;
 import android.app.KeyguardManager;
 import android.app.Notification;
@@ -204,13 +206,16 @@ import com.android.systemui.plugins.statusbar.NotificationSwipeActionHelper.Snoo
 import com.android.systemui.qs.QSFragment;
 import com.android.systemui.qs.QSPanel;
 import com.android.systemui.qs.QSTileHost;
+import com.android.systemui.qs.QuickStatusBarHeader;
 import com.android.systemui.qs.car.CarQSFragment;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.recents.ScreenPinningRequest;
 import com.android.systemui.recents.events.EventBus;
 import com.android.systemui.recents.events.activity.AppTransitionFinishedEvent;
 import com.android.systemui.recents.events.activity.UndockingTaskEvent;
+import com.android.systemui.slimrecent.icons.IconsHandler;
 import com.android.systemui.recents.misc.SystemServicesProxy;
+import com.android.systemui.slimrecent.RecentController;
 import com.android.systemui.stackdivider.Divider;
 import com.android.systemui.stackdivider.WindowManagerProxy;
 import com.android.systemui.statusbar.ActivatableNotificationView;
@@ -237,6 +242,7 @@ import com.android.systemui.statusbar.notification.AboveShelfObserver;
 import com.android.systemui.statusbar.notification.InflationException;
 import com.android.systemui.statusbar.notification.RowInflaterTask;
 import com.android.systemui.statusbar.notification.VisualStabilityManager;
+import com.android.systemui.statusbar.phone.ThemeAccentUtils;
 import com.android.systemui.statusbar.phone.Ticker;
 import com.android.systemui.statusbar.phone.TickerView;
 import com.android.systemui.statusbar.phone.UnlockMethodCache.OnUnlockMethodChangedListener;
@@ -475,6 +481,7 @@ public class StatusBar extends SystemUI implements DemoMode,
 
     // settings
     private QSPanel mQSPanel;
+    private QuickStatusBarHeader mQuickStatusBarHeader;
 
     // top bar
     protected KeyguardStatusBarView mKeyguardStatusBar;
@@ -501,6 +508,7 @@ public class StatusBar extends SystemUI implements DemoMode,
     ActivityManager mAm;
     private ArrayList<String> mBlacklist = new ArrayList<String>();
 
+    private boolean mFpQuickPulldownQs;
     private boolean mFpDismissNotifications;
 
     // the tracker view
@@ -510,6 +518,7 @@ public class StatusBar extends SystemUI implements DemoMode,
     private int mTickerEnabled;
     private Ticker mTicker;
     private boolean mTicking;
+    private int mTickerAnimationMode;
 
     private int mAmbientMediaPlaying;
 
@@ -653,6 +662,9 @@ public class StatusBar extends SystemUI implements DemoMode,
         @Override
         public void onSessionDestroyed() {
             super.onSessionDestroyed();
+            if (mTicker != null) {
+                mTicker.resetShownMediaMetadata();
+            }
             setMediaPlaying();
         }
     };
@@ -675,7 +687,7 @@ public class StatusBar extends SystemUI implements DemoMode,
                 mNavigationBar.setMediaPlaying(true);
             }
         } else {
-            if (mAmbientMediaPlaying != 0 && mAmbientIndicationContainer != null) {
+            if (isAmbientContainerAvailable()) {
                 ((AmbientIndicationContainer)mAmbientIndicationContainer).hideIndication();
             }
             mNoMan.setMediaPlaying(false);
@@ -695,7 +707,7 @@ public class StatusBar extends SystemUI implements DemoMode,
                 if (mTickerEnabled == 2) {
                     tick(entry.notification, true, true, mMediaMetadata);
                 }
-                if (mAmbientMediaPlaying != 0 && mAmbientIndicationContainer != null) {
+                if (isAmbientContainerAvailable()) {
                     ((AmbientIndicationContainer)mAmbientIndicationContainer).setIndication(mMediaMetadata);
                 }
                 // NotificationInflater calls async MediaNotificationProcessoron to create notification
@@ -1236,7 +1248,7 @@ public class StatusBar extends SystemUI implements DemoMode,
         mAmbientIndicationContainer = mStatusBarWindow.findViewById(
                 R.id.ambient_indication_container);
         if (mAmbientIndicationContainer != null) {
-            ((AmbientIndicationContainer) mAmbientIndicationContainer).initializeView(this);
+            ((AmbientIndicationContainer) mAmbientIndicationContainer).initializeView(this, mHandler);
         }
 
         // set the initial view visibility
@@ -1319,6 +1331,7 @@ public class StatusBar extends SystemUI implements DemoMode,
                     mQSPanel = ((QSFragment) qs).getQsPanel();
                     mQSPanel.setBrightnessMirror(mBrightnessMirrorController);
                     mKeyguardStatusBar.setQSPanel(mQSPanel);
+                    mQuickStatusBarHeader = (QuickStatusBarHeader) ((QSFragment) qs).getHeader();
                 }
             });
         }
@@ -1783,8 +1796,19 @@ public class StatusBar extends SystemUI implements DemoMode,
         }
         int dockSide = WindowManagerProxy.getInstance().getDockSide();
         if (dockSide == WindowManager.DOCKED_INVALID) {
-            return mRecents.dockTopTask(NavigationBarGestureHelper.DRAG_MODE_NONE,
-                    ActivityManager.DOCKED_STACK_CREATE_MODE_TOP_OR_LEFT, null, metricsDockAction);
+            boolean isInLockTaskMode = false;
+            try {
+                IActivityManager activityManager = ActivityManagerNative.getDefault();
+                if (activityManager.isInLockTaskMode()) {
+                    isInLockTaskMode = true;
+                }
+            } catch (RemoteException e) {}
+            if (mSlimRecents != null && !isInLockTaskMode) {
+                mSlimRecents.startMultiWindow();
+            } else {
+                return mRecents.dockTopTask(NavigationBarGestureHelper.DRAG_MODE_NONE,
+                        ActivityManager.DOCKED_STACK_CREATE_MODE_TOP_OR_LEFT, null, metricsDockAction);
+            }
         } else {
             Divider divider = getComponent(Divider.class);
             if (divider != null && divider.isMinimized() && !divider.isHomeStackResizable()) {
@@ -2523,6 +2547,9 @@ public class StatusBar extends SystemUI implements DemoMode,
                 mMediaController = controller;
                 mMediaController.registerCallback(mMediaListener);
                 mMediaMetadata = mMediaController.getMetadata();
+                if (mTicker != null) {
+                    mTicker.resetShownMediaMetadata();
+                }
                 setMediaPlaying();
                 if (DEBUG_MEDIA) {
                     Log.v(TAG, "DEBUG_MEDIA: insert listener, receive metadata: "
@@ -3081,29 +3108,19 @@ public class StatusBar extends SystemUI implements DemoMode,
         updateTheme();
     }
 
+    // Check for the dark system theme
     public boolean isUsingDarkTheme() {
-        OverlayInfo themeInfo = null;
-        try {
-            themeInfo = mOverlayManager.getOverlayInfo("com.android.system.theme.dark",
-                    mCurrentUserId);
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
-        return themeInfo != null && themeInfo.isEnabled();
+        return ThemeAccentUtils.isUsingDarkTheme(mOverlayManager, mCurrentUserId);
     }
 
+    // Unloads the stock dark theme
     public void unloadStockDarkTheme() {
-        OverlayInfo themeInfo = null;
-        try {
-            themeInfo = mOverlayManager.getOverlayInfo("com.android.systemui.theme.dark",
-                    mCurrentUserId);
-            if (themeInfo != null && themeInfo.isEnabled()) {
-                mOverlayManager.setEnabled("com.android.systemui.theme.dark",
-                        false /*disable*/, mCurrentUserId);
-            }
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
+        ThemeAccentUtils.unloadStockDarkTheme(mOverlayManager, mCurrentUserId);
+    }
+
+    // Check for black and white accent overlays
+    public void unfuckBlackWhiteAccent() {
+        ThemeAccentUtils.unfuckBlackWhiteAccent(mOverlayManager, mCurrentUserId);
     }
 
     @Nullable
@@ -3217,8 +3234,13 @@ public class StatusBar extends SystemUI implements DemoMode,
         } else if (KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN == key) {
             mMetricsLogger.action(MetricsEvent.ACTION_SYSTEM_NAVIGATION_KEY_DOWN);
             if (mNotificationPanel.isFullyCollapsed()) {
-                mNotificationPanel.expand(true /* animate */);
-                mMetricsLogger.count(NotificationPanelView.COUNTER_PANEL_OPEN, 1);
+                if (mFpQuickPulldownQs) {
+                    mNotificationPanel.expandWithQs();
+                    mMetricsLogger.count(NotificationPanelView.COUNTER_PANEL_OPEN_QS, 1);
+                } else {
+                    mNotificationPanel.expand(true /* animate */);
+                    mMetricsLogger.count(NotificationPanelView.COUNTER_PANEL_OPEN, 1);
+                }
             } else if (!mNotificationPanel.isInSettings() && !mNotificationPanel.isExpanding()){
                 mNotificationPanel.flingSettings(0 /* velocity */, true /* expand */);
                 mMetricsLogger.count(NotificationPanelView.COUNTER_PANEL_OPEN_QS, 1);
@@ -3778,7 +3800,7 @@ public class StatusBar extends SystemUI implements DemoMode,
         public View mTickerView;
 
         MyTicker(Context context, View sb) {
-            super(context, sb);
+            super(context, sb, mTickerAnimationMode);
             if (mTickerEnabled == 0) {
                 Log.w(TAG, "MyTicker instantiated with mTickerEnabled=0", new Throwable());
             }
@@ -3792,28 +3814,42 @@ public class StatusBar extends SystemUI implements DemoMode,
         public void tickerStarting() {
             if (mTicker == null || mTickerEnabled == 0) return;
             mTicking = true;
+            Animation outAnim, inAnim;
+            if (mTickerAnimationMode == 1) {
+                outAnim = loadAnim(com.android.internal.R.anim.push_up_out, null);
+                inAnim = loadAnim(com.android.internal.R.anim.push_up_in, null);
+            } else {
+                outAnim = loadAnim(true, null);
+                inAnim = loadAnim(false, null);
+            }
             mStatusBarContent.setVisibility(View.GONE);
-            mStatusBarContent.startAnimation(loadAnim(true, null));
+            mStatusBarContent.startAnimation(outAnim);
             if (mTickerView != null) {
                 mTickerView.setVisibility(View.VISIBLE);
-                mTickerView.startAnimation(loadAnim(false, null));
+                mTickerView.startAnimation(inAnim);
             }
         }
 
         @Override
         public void tickerDone() {
-            if (mTicker == null || mTickerEnabled == 0) return;
+            Animation outAnim, inAnim;
+            if (mTickerAnimationMode == 1) {
+                outAnim = loadAnim(com.android.internal.R.anim.push_up_out, mTickingDoneListener);
+                inAnim = loadAnim(com.android.internal.R.anim.push_up_in, null);
+            } else {
+                outAnim = loadAnim(true, mTickingDoneListener);
+                inAnim = loadAnim(false, null);
+            }
             mStatusBarContent.setVisibility(View.VISIBLE);
-            mStatusBarContent.startAnimation(loadAnim(false, null));
+            mStatusBarContent.startAnimation(inAnim);
             if (mTickerView != null) {
                 mTickerView.setVisibility(View.GONE);
-                mTickerView.startAnimation(loadAnim(true, mTickingDoneListener));
+                mTickerView.startAnimation(outAnim);
             }
         }
 
         @Override
         public void tickerHalting() {
-            if (mTicker == null || mTickerEnabled == 0) return;
             if (mStatusBarContent.getVisibility() != View.VISIBLE) {
                 mStatusBarContent.setVisibility(View.VISIBLE);
                 mStatusBarContent
@@ -3853,6 +3889,14 @@ public class StatusBar extends SystemUI implements DemoMode,
         }
 
         return animation;
+    }
+
+    private Animation loadAnim(int id, Animation.AnimationListener listener) {
+        Animation anim = AnimationUtils.loadAnimation(mContext, id);
+        if (listener != null) {
+            anim.setAnimationListener(listener);
+        }
+        return anim;
     }
 
     private void haltTicker() {
@@ -4240,6 +4284,10 @@ public class StatusBar extends SystemUI implements DemoMode,
 
         updateRowStates();
         mScreenPinningRequest.onConfigurationChanged();
+
+        if (mSlimRecents != null) {
+            mSlimRecents.onConfigurationChanged(newConfig);
+        }
     }
 
     public void userSwitched(int newUserId) {
@@ -5067,25 +5115,17 @@ public class StatusBar extends SystemUI implements DemoMode,
                     .getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
             useDarkTheme = systemColors != null
                     && (systemColors.getColorHints() & WallpaperColors.HINT_SUPPORTS_DARK_THEME) != 0;
+            // Check for black and white accent so we don't end up
+            // with white on white or black on black
+            unfuckBlackWhiteAccent();
         } else {
             useDarkTheme = userThemeSetting == 2;
+            // Check for black and white accent so we don't end up
+            // with white on white or black on black
+            unfuckBlackWhiteAccent();
         }
         if (isUsingDarkTheme() != useDarkTheme) {
-            try {
-                mOverlayManager.setEnabled("com.android.system.theme.dark",
-                        useDarkTheme, mCurrentUserId);
-                mOverlayManager.setEnabled("com.android.settings.theme.dark",
-                        useDarkTheme, mCurrentUserId);
-                mOverlayManager.setEnabled("com.android.dui.theme.dark",
-                        useDarkTheme, mCurrentUserId);
-                mOverlayManager.setEnabled("com.android.gboard.theme.dark",
-                        useDarkTheme, mCurrentUserId);
-                if (useDarkTheme) {
-                    unloadStockDarkTheme();
-                }
-            } catch (RemoteException e) {
-                Log.w(TAG, "Can't change theme", e);
-            }
+            ThemeAccentUtils.setLightDarkTheme(mOverlayManager, mCurrentUserId, useDarkTheme);
         }
 
         // Lock wallpaper defines the color of the majority of the views, hence we'll use it
@@ -5114,6 +5154,18 @@ public class StatusBar extends SystemUI implements DemoMode,
             // Make sure we have the correct navbar/statusbar colors.
             mStatusBarWindowManager.setKeyguardDark(useDarkText);
         }
+    }
+
+    // Switches theme accent from to another or back to stock
+    public void updateAccents() {
+        int accentSetting = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.ACCENT_PICKER, 0, mCurrentUserId);
+        ThemeAccentUtils.updateAccents(mOverlayManager, mCurrentUserId, accentSetting);
+    }
+
+    // Unload all the theme accents
+    public void unloadAccents() {
+        ThemeAccentUtils.unloadAccents(mOverlayManager, mCurrentUserId);
     }
 
     private void updateDozingState() {
@@ -5968,6 +6020,9 @@ public class StatusBar extends SystemUI implements DemoMode,
                         setPulsing(pulsingEntries);
                     }
                     setCleanLayout(mAmbientMediaPlaying == 3 ? reason : -1);
+                    if (isAmbientContainerAvailable()) {
+                        ((AmbientIndicationContainer)mAmbientIndicationContainer).setTickerMarquee(true);
+                    }
                 }
 
                 @Override
@@ -5975,6 +6030,9 @@ public class StatusBar extends SystemUI implements DemoMode,
                     callback.onPulseFinished();
                     setPulsing(null);
                     setCleanLayout(-1);
+                    if (isAmbientContainerAvailable()) {
+                        ((AmbientIndicationContainer)mAmbientIndicationContainer).setTickerMarquee(false);
+                    }
                 }
 
                 private void setPulsing(Collection<HeadsUpManager.HeadsUpEntry> pulsing) {
@@ -5987,7 +6045,7 @@ public class StatusBar extends SystemUI implements DemoMode,
                 private void setCleanLayout(int reason) {
                     mNotificationPanel.setCleanLayout(reason);
                     mNotificationShelf.setCleanLayout(reason);
-                    if (mAmbientMediaPlaying != 0 && mAmbientIndicationContainer != null) {
+                    if (isAmbientContainerAvailable()) {
                         ((AmbientIndicationContainer)mAmbientIndicationContainer).setCleanLayout(reason);
                     }
                 }
@@ -6072,7 +6130,7 @@ public class StatusBar extends SystemUI implements DemoMode,
 
         @Override
         public void onDoubleTap(float screenX, float screenY) {
-            if (screenX > 0 && screenY > 0 && mAmbientIndicationContainer != null 
+            if (screenX > 0 && screenY > 0 && mAmbientIndicationContainer != null
                 && mAmbientIndicationContainer.getVisibility() == View.VISIBLE) {
                 mAmbientIndicationContainer.getLocationOnScreen(mTmpInt2);
                 float viewX = screenX - mTmpInt2[0];
@@ -6195,6 +6253,8 @@ public class StatusBar extends SystemUI implements DemoMode,
 
     protected RecentsComponent mRecents;
 
+    protected RecentController mSlimRecents;
+
     protected int mZenMode;
 
     // which notification is currently being longpress-examined by the user
@@ -6291,13 +6351,43 @@ public class StatusBar extends SystemUI implements DemoMode,
                     Settings.System.SYSTEM_UI_THEME),
                     false, this, UserHandle.USER_ALL);
             resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.ACCENT_PICKER),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.FORCE_AMBIENT_FOR_MEDIA),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.Secure.getUriFor(
+                    Settings.Secure.FP_QUICK_PULLDOWN_QS),
                     false, this, UserHandle.USER_ALL);
             resolver.registerContentObserver(Settings.Secure.getUriFor(
                     Settings.Secure.FP_SWIPE_TO_DISMISS_NOTIFICATIONS),
                     false, this, UserHandle.USER_ALL);
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.LOCKSCREEN_MEDIA_METADATA),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.QS_FOOTER_WARNINGS),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.SHOW_BATTERY_PERCENT),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.Secure.getUriFor(
+                    Settings.Secure.STATUS_BAR_BATTERY_STYLE),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.Secure.getUriFor(
+                    Settings.Secure.STATUS_BAR_BIG_BATTERY_ICON),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.RECENTS_ICON_PACK),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.USE_SLIM_RECENTS),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.STATUS_BAR_TICKER_ANIMATION_MODE),
                     false, this, UserHandle.USER_ALL);
         }
 
@@ -6315,14 +6405,45 @@ public class StatusBar extends SystemUI implements DemoMode,
                     Settings.System.SYSTEM_UI_THEME))) {
                 updateTheme();
             } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.ACCENT_PICKER))) {
+                // Unload the accents and update the accent only when the user asks.
+                // Keeps us from overloading the system by performing these tasks every time.
+                unloadAccents();
+                updateAccents();
+            } else if (uri.equals(Settings.System.getUriFor(
                     Settings.System.FORCE_AMBIENT_FOR_MEDIA))) {
                 setForceAmbient();
+            } else if (uri.equals(Settings.Secure.getUriFor(
+                    Settings.Secure.FP_QUICK_PULLDOWN_QS))) {
+                setFpToQuickPulldownQs();
             } else if (uri.equals(Settings.Secure.getUriFor(
                     Settings.Secure.FP_SWIPE_TO_DISMISS_NOTIFICATIONS))) {
                 setFpToDismissNotifications();
             } else if (uri.equals(Settings.System.getUriFor(
                     Settings.System.LOCKSCREEN_MEDIA_METADATA))) {
                 setLockscreenMediaMetadata();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.QS_FOOTER_WARNINGS))) {
+                setQsPanelOptions();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.SHOW_BATTERY_PERCENT))
+                    || uri.equals(Settings.Secure.getUriFor(
+                    Settings.Secure.STATUS_BAR_BATTERY_STYLE))
+                    || uri.equals(Settings.Secure.getUriFor(
+                    Settings.Secure.STATUS_BAR_BIG_BATTERY_ICON))) {
+                setStatusBarOptions();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN))) {
+                setStatusBarWindowViewOptions();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.RECENTS_ICON_PACK))) {
+                updateRecentsIconPack();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.USE_SLIM_RECENTS))) {
+                updateRecentsMode();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.STATUS_BAR_TICKER_ANIMATION_MODE))) {
+                updateTickerAnimation();
             }
         }
 
@@ -6331,8 +6452,37 @@ public class StatusBar extends SystemUI implements DemoMode,
             setHeadsUpBlacklist();
             setQsLayoutColumns();
             setForceAmbient();
+            setFpToQuickPulldownQs();
             setFpToDismissNotifications();
             setLockscreenMediaMetadata();
+            setQsPanelOptions();
+            setStatusBarOptions();
+            updateRecentsMode();
+            updateTickerAnimation();
+        }
+    }
+
+    private void setStatusBarOptions() {
+        if (mStatusBarView != null) {
+            mStatusBarView.updateSettings();
+        }
+        if (mKeyguardStatusBar != null) {
+            mKeyguardStatusBar.updateSettings();
+        }
+        if (mQuickStatusBarHeader != null) {
+            mQuickStatusBarHeader.updateSettings();
+        }
+    }
+
+    public void updateQsbhClock() {
+        if (mQuickStatusBarHeader != null) {
+            mQuickStatusBarHeader.updateQsbhClock();
+        }
+    }
+
+    private void setQsPanelOptions() {
+        if (mQSPanel != null) {
+            mQSPanel.updateSettings();
         }
     }
 
@@ -6358,15 +6508,71 @@ public class StatusBar extends SystemUI implements DemoMode,
         mAmbientMediaPlaying = Settings.System.getIntForUser(mContext.getContentResolver(),
                 Settings.System.FORCE_AMBIENT_FOR_MEDIA, 0,
                 UserHandle.USER_CURRENT);
-        if (mAmbientMediaPlaying != 0 && mAmbientIndicationContainer != null) {
+        if (isAmbientContainerAvailable()) {
             ((AmbientIndicationContainer)mAmbientIndicationContainer).setIndication(mMediaMetadata);
         }
+    }
+
+    private boolean isAmbientContainerAvailable() {
+        return mAmbientMediaPlaying != 0 && mAmbientIndicationContainer != null;
+    }
+
+    private void setFpToQuickPulldownQs() {
+        mFpQuickPulldownQs = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                Settings.Secure.FP_QUICK_PULLDOWN_QS, 0,
+                UserHandle.USER_CURRENT) == 1;
     }
 
     private void setFpToDismissNotifications() {
         mFpDismissNotifications = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                 Settings.Secure.FP_SWIPE_TO_DISMISS_NOTIFICATIONS, 0,
                 UserHandle.USER_CURRENT) == 1;
+    }
+
+    private boolean isSlimRecentsEnabled() {
+        return Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.USE_SLIM_RECENTS, 0, mCurrentUserId) == 1;
+    }
+
+    private void updateRecentsIconPack() {
+        if (!isSlimRecentsEnabled()) {
+            String currentIconPack = Settings.System.getStringForUser(mContext.getContentResolver(),
+                Settings.System.RECENTS_ICON_PACK, mCurrentUserId);
+            mRecents.resetIconCache();
+            mRecents.getIconsHandler().updatePrefs(currentIconPack);
+        }
+    }
+
+    private void updateRecentsMode() {
+        if (isSlimRecentsEnabled()) {
+            mRecents.evictAllCaches();
+            mRecents.removeSbCallbacks();
+            mSlimRecents = new RecentController(mContext);
+            rebuildRecentsScreen();
+            mSlimRecents.addSbCallbacks();
+        } else {
+            mRecents.addSbCallbacks();
+            if (mSlimRecents != null) {
+                mSlimRecents.evictAllCaches();
+                mSlimRecents.removeSbCallbacks();
+                mSlimRecents = null;
+            }
+        }
+        updateRecentsIconPack();
+    }
+
+    private void rebuildRecentsScreen() {
+        if (mSlimRecents != null) {
+            mSlimRecents.rebuildRecentsScreen();
+        }
+    }
+
+    private void updateTickerAnimation() {
+        mTickerAnimationMode = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.STATUS_BAR_TICKER_ANIMATION_MODE, 1, UserHandle.USER_CURRENT);
+        if (mTicker != null) {
+            mTicker.updateAnimation(mTickerAnimationMode);
+        }
     }
 
     protected final ContentObserver mNavbarObserver = new ContentObserver(mHandler) {
