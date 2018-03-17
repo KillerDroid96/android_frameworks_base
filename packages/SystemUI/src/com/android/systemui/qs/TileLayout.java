@@ -1,5 +1,6 @@
 package com.android.systemui.qs;
 
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.Resources;
 import android.os.UserHandle;
@@ -25,6 +26,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
     protected int mCellHeight;
     protected int mCellMargin;
     protected int mDefaultColumns;
+    protected boolean mShowTitles = true;
 
     protected final ArrayList<TileRecord> mRecords = new ArrayList<>();
     private int mCellMarginTop;
@@ -58,6 +60,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
         mRecords.add(tile);
         tile.tile.setListening(this, mListening);
         addView(tile.tileView);
+        tile.tileView.textVisibility();
     }
 
     @Override
@@ -77,12 +80,25 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
 
     public boolean updateResources() {
         final Resources res = mContext.getResources();
+        final ContentResolver resolver = mContext.getContentResolver();
 
-        mCellHeight = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_height);
+        boolean showTitles = Settings.System.getIntForUser(resolver,
+                Settings.System.QS_TILE_TITLE_VISIBILITY, 1,
+                UserHandle.USER_CURRENT) == 1;
+        mShowTitles = showTitles;
+        if (showTitles) {
+            mCellHeight = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_height);
+        } else {
+            mCellHeight = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_height_wo_label);
+        }
         mCellMargin = res.getDimensionPixelSize(R.dimen.qs_tile_margin);
         mCellMarginTop = res.getDimensionPixelSize(R.dimen.qs_tile_margin_top);
+        for (TileRecord record : mRecords) {
+            record.tileView.textVisibility();
+        }
 
         updateSettings();
+
         return false;
     }
 
@@ -150,7 +166,11 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
                 UserHandle.USER_CURRENT);
         if (mColumns != columns) {
             mColumns = columns;
-            requestLayout();
         }
+        requestLayout();
+    }
+
+    public boolean isShowTitles() {
+        return mShowTitles;
     }
 }
