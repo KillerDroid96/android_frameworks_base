@@ -2977,6 +2977,13 @@ public final class Settings {
             "lock_pattern_tactile_feedback_enabled";
 
         /**
+         * Whether to scramble a pin unlock layout
+         * @hide
+         */
+        public static final String LOCKSCREEN_PIN_SCRAMBLE_LAYOUT =
+                "lockscreen_scramble_pin_layout";
+
+        /**
          * A formatted string of the next alarm that is set, or the empty string
          * if there is no alarm set.
          *
@@ -4486,6 +4493,26 @@ public final class Settings {
         public static final String DOUBLE_TAP_SLEEP_LOCKSCREEN = "double_tap_sleep_lockscreen";
 
         /**
+         * Configure the app to be used to edit screenshots with
+         * @hide
+         */
+        public static final String SCREENSHOT_EDIT_USER_APP = "screenshot_edit_user_app";
+
+        /**
+         * Hold current font name and name of the originating package Uses "|" as a delimiter
+         *
+         * @hide
+         */
+        public static final String FONT_INFO = "font_info";
+
+        /**
+         * Hold list of installed font provider packages. Uses "|" as a delimiter
+         *
+         * @hide
+         */
+        public static final String FONT_PACKAGES = "font_packages";
+
+        /**
          * Whether to use slim recents
          * @hide
          */
@@ -4530,7 +4557,7 @@ public final class Settings {
          */
         public static final String RECENT_PANEL_BG_COLOR = "recent_panel_bg_color";
 
-         /**
+        /**
          * Recent card background color
          *
          * @hide
@@ -4566,8 +4593,7 @@ public final class Settings {
          * 0: Fade animation
          * 1: Scrolling ticker
          */
-        public static final String STATUS_BAR_TICKER_ANIMATION_MODE =
-                "status_bar_ticker_animation_mode";
+        public static final String STATUS_BAR_TICKER_ANIMATION_MODE = "status_bar_ticker_animation_mode";
 
         /**
          * Whether to display qs tile titles in the qs panel
@@ -4580,6 +4606,27 @@ public final class Settings {
          * @hide
          */
         public static final String QS_PANEL_BG_ALPHA = "qs_panel_bg_alpha";
+
+        /**
+         * Change quick settings tiles animation style
+         *
+         * @hide
+         */
+        public static final String ANIM_TILE_STYLE = "anim_tile_style";
+
+        /**
+         * Change quick settings tiles animation duration
+         *
+         * @hide
+         */
+        public static final String ANIM_TILE_DURATION = "anim_tile_duration";
+
+        /**
+         * Change quick settings tiles interpolator
+         *
+         * @hide
+         */
+        public static final String ANIM_TILE_INTERPOLATOR = "anim_tile_interpolator";
 
         /**
          * Settings to backup. This is here so that it's in the same place as the settings
@@ -5440,7 +5487,7 @@ public final class Settings {
             }
             return sNameValueCache.putStringForUser(resolver, name, value, tag,
                     makeDefault, userHandle);
-        }
+}
 
         /**
          * Store a name/value pair into the database.
@@ -12348,3 +12395,4 @@ public final class Settings {
         return packages[0];
     }
 }
+

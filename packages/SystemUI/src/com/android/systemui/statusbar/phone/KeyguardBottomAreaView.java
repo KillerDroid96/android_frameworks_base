@@ -38,6 +38,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -94,6 +95,7 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
         AccessibilityController.AccessibilityStateChangedCallback, View.OnLongClickListener {
 
     final static String TAG = "StatusBar/KeyguardBottomAreaView";
+    private static final String FONT_FAMILY = "sans-serif";
 
     public static final String CAMERA_LAUNCH_SOURCE_AFFORDANCE = "lockscreen_affordance";
     public static final String CAMERA_LAUNCH_SOURCE_WIGGLE = "wiggle_gesture";
@@ -260,6 +262,7 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
         mAssistManager = Dependency.get(AssistManager.class);
         mLockIcon.setAccessibilityController(mAccessibilityController);
         updateLeftAffordance();
+        updateRightAffordance();
     }
 
     @Override
@@ -306,6 +309,7 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
     @Override
     protected void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        Typeface tf = Typeface.create(FONT_FAMILY, Typeface.ITALIC);
         int indicationBottomMargin = getResources().getDimensionPixelSize(
                 R.dimen.keyguard_indication_margin_bottom);
         MarginLayoutParams mlp = (MarginLayoutParams) mIndicationArea.getLayoutParams();
@@ -321,7 +325,7 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
         mIndicationText.setTextSize(TypedValue.COMPLEX_UNIT_PX,
                 getResources().getDimensionPixelSize(
                         com.android.internal.R.dimen.text_size_small_material));
-
+        mIndicationText.setTypeface(tf);
         ViewGroup.LayoutParams lp = mRightAffordanceView.getLayoutParams();
         lp.width = getResources().getDimensionPixelSize(R.dimen.keyguard_affordance_width);
         lp.height = getResources().getDimensionPixelSize(R.dimen.keyguard_affordance_height);
@@ -346,7 +350,8 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
         IconState state = mRightButton.getIcon();
         mRightAffordanceView.setVisibility(!mDozing && state.isVisible ? View.VISIBLE : View.GONE);
         if (state.isVisible) {
-            mRightAffordanceView.setImageDrawable(state.drawable, state.tint);
+            mRightAffordanceView.setImageDrawable(state.drawable, state.tint,
+                    state.isDefaultButton ? false : true);
             mRightAffordanceView.setContentDescription(state.contentDescription);
         }
     }
@@ -364,6 +369,7 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
         mUserSetupComplete = userSetupComplete;
         updateCameraVisibility();
         updateLeftAffordanceIcon();
+        updateRightAffordanceIcon();
     }
 
     protected Intent getRightIntent() {
@@ -406,7 +412,8 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
         IconState state = mLeftButton.getIcon();
         mLeftAffordanceView.setVisibility(!mDozing && state.isVisible ? View.VISIBLE : View.GONE);
         if (state.isVisible) {
-            mLeftAffordanceView.setImageDrawable(state.drawable, state.tint);
+            mLeftAffordanceView.setImageDrawable(state.drawable, state.tint,
+                    state.isDefaultButton ? false : true);
             mLeftAffordanceView.setContentDescription(state.contentDescription);
         }
     }
@@ -822,14 +829,15 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
 
     public void onKeyguardShowingChanged() {
         updateLeftAffordance();
+        updateRightAffordance();
         inflateCameraPreview();
     }
 
     private void setRightButton(IntentButton button) {
         mRightButton = button;
-        updateRightAffordanceIcon();
         updateCameraVisibility();
         inflateCameraPreview();
+        updateRightAffordance();
     }
 
     private void setLeftButton(IntentButton button) {
@@ -846,6 +854,7 @@ public class KeyguardBottomAreaView extends FrameLayout implements View.OnClickL
 
         updateCameraVisibility();
         updateLeftAffordanceIcon();
+        updateRightAffordanceIcon();
 
         if (dozing) {
             mLockIcon.setVisibility(INVISIBLE);

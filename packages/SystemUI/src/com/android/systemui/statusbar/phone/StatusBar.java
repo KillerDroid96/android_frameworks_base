@@ -683,6 +683,9 @@ public class StatusBar extends SystemUI implements DemoMode,
                 // pulse colors already set by titckTrackInfo
                 mNavigationBar.setMediaPlaying(true);
             }
+            if (mSlimRecents != null) {
+                mSlimRecents.setMediaPlaying(true, currentPkg);
+            }
         } else {
             if (isAmbientContainerAvailable()) {
                 ((AmbientIndicationContainer)mAmbientIndicationContainer).hideIndication();
@@ -690,6 +693,9 @@ public class StatusBar extends SystemUI implements DemoMode,
             mNoMan.setMediaPlaying(false);
             if (mNavigationBar != null) {
                 mNavigationBar.setMediaPlaying(false);
+            }
+            if (mSlimRecents != null) {
+                mSlimRecents.setMediaPlaying(false, "");
             }
         }
     }
@@ -706,6 +712,9 @@ public class StatusBar extends SystemUI implements DemoMode,
                 }
                 if (isAmbientContainerAvailable()) {
                     ((AmbientIndicationContainer)mAmbientIndicationContainer).setIndication(mMediaMetadata);
+                }
+                if (mSlimRecents != null) {
+                    mSlimRecents.setMediaInfo(mMediaMetadata);
                 }
                 // NotificationInflater calls async MediaNotificationProcessoron to create notification
                 // colors and when finished will trigger AsyncInflationFinished for all registered callbacks
@@ -1482,6 +1491,30 @@ public class StatusBar extends SystemUI implements DemoMode,
         reevaluateStyles();
     }
 
+    @Override
+    public void onOverlayChanged() {
+        reinflateViews();
+        updateNotificationsOnOverlayChanged();
+        mStackScroller.onOverlayChanged();
+        mNotificationShelf.onOverlayChanged();
+        mNotificationPanel.onOverlayChanged();
+        Dependency.get(DarkIconDispatcher.class).onOverlayChanged(mContext);
+    }
+
+    private void updateNotificationsOnOverlayChanged() {
+        ArrayList<Entry> activeNotifications = mNotificationData.getActiveNotifications();
+        for (int i = 0; i < activeNotifications.size(); i++) {
+            Entry entry = activeNotifications.get(i);
+            boolean exposedGuts = mNotificationGutsExposed != null
+                    && entry.row.getGuts() == mNotificationGutsExposed;
+            entry.row.onOverlayChanged();
+            if (exposedGuts) {
+                mNotificationGutsExposed = entry.row.getGuts();
+                bindGuts(entry.row, mGutsMenuItem);
+            }
+        }
+    }
+
     private void reinflateViews() {
         reevaluateStyles();
 
@@ -1920,11 +1953,14 @@ public class StatusBar extends SystemUI implements DemoMode,
         entry.row.setLowPriorityStateUpdated(false);
 
         if (mEntryToRefresh == entry) {
+            final Notification n = entry.notification.getNotification();
+            final int[] colors = {n.backgroundColor, n.foregroundColor,
+                    n.primaryTextColor, n.secondaryTextColor};
             if (mNavigationBar != null) {
-                Notification n = entry.notification.getNotification();
-                int[] colors = {n.backgroundColor, n.foregroundColor,
-                        n.primaryTextColor, n.secondaryTextColor};
                 mNavigationBar.setPulseColors(n.isColorizedMedia(), colors);
+            }
+            if (mSlimRecents != null) {
+                mSlimRecents.setMediaColors(n.isColorizedMedia(), colors);
             }
         }
     }
@@ -6447,6 +6483,10 @@ public class StatusBar extends SystemUI implements DemoMode,
             } else if (uri.equals(Settings.Secure.getUriFor(Settings.Secure.QS_LAYOUT_COLUMNS)) ||
                     uri.equals(Settings.System.getUriFor(Settings.System.QS_TILE_TITLE_VISIBILITY))) {
                 updateQsPanelResources();
+                setQsPanelOptions();
+            } else if (uri.equals(Settings.System.getUriFor(Settings.System.ANIM_TILE_STYLE)) ||
+                    uri.equals(Settings.System.getUriFor(Settings.System.ANIM_TILE_DURATION)) ||
+                    uri.equals(Settings.System.getUriFor(Settings.System.ANIM_TILE_INTERPOLATOR))) {
                 setQsPanelOptions();
             }
         }
