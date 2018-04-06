@@ -84,6 +84,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
@@ -1960,7 +1961,12 @@ public class StatusBar extends SystemUI implements DemoMode,
                 mNavigationBar.setPulseColors(n.isColorizedMedia(), colors);
             }
             if (mSlimRecents != null) {
-                mSlimRecents.setMediaColors(n.isColorizedMedia(), colors);
+                Icon icon = n.getOriginalLargeIcon();
+                Drawable drawable = null;
+                if (icon != null) {
+                    drawable = icon.loadDrawable(mContext);
+                }
+                mSlimRecents.setMediaColors(n.isColorizedMedia(), colors, drawable);
             }
         }
     }
@@ -4656,6 +4662,7 @@ public class StatusBar extends SystemUI implements DemoMode,
         Dependency.get(ConfigurationController.class).removeCallback(this);
     }
 
+    // From DUPackageMonitor (mPackageMonitor) util
     @Override
     public void onPackageChanged(String pkg, PackageState state) {
         if (state == PackageState.PACKAGE_REMOVED
@@ -4678,6 +4685,11 @@ public class StatusBar extends SystemUI implements DemoMode,
             });
             thread.setPriority(Process.THREAD_PRIORITY_BACKGROUND);
             thread.start();
+
+            // ask SlimRecents controller to refresh the cache
+            if (mSlimRecents != null) {
+                mSlimRecents.refreshCachedPackage(pkg, state == PackageState.PACKAGE_REMOVED);
+            }
         }
     }
 
