@@ -16,12 +16,13 @@ package com.android.systemui.globalactions;
 
 import android.app.Dialog;
 import android.app.KeyguardManager;
-import android.app.WallpaperColors;
 import android.app.WallpaperManager;
 import android.content.Context;
-import android.graphics.Color;
 import android.graphics.Point;
+import android.graphics.drawable.ColorDrawable;
 import android.os.PowerManager;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -41,6 +42,7 @@ import com.android.systemui.statusbar.policy.KeyguardMonitor;
 public class GlobalActionsImpl implements GlobalActions {
 
     private static final float SHUTDOWN_SCRIM_ALPHA = 0.95f;
+    private static final float CUSTOM_SHUTDOWN_SCRIM_ALPHA = 0.00f;
 
     private final Context mContext;
     private final KeyguardMonitor mKeyguardMonitor;
@@ -83,7 +85,7 @@ public class GlobalActionsImpl implements GlobalActions {
                         | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                         | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
-        window.setBackgroundDrawable(background);
+        window.setBackgroundDrawable(showWallpaperTint(mContext) ? background : new ColorDrawable(mContext.getResources().getColor(com.android.systemui.R.color.power_menu_wallpaper_tint_off_color)));
         window.setWindowAnimations(R.style.Animation_Toast);
 
         d.setContentView(R.layout.shutdown_dialog);
@@ -113,5 +115,10 @@ public class GlobalActionsImpl implements GlobalActions {
         background.setScreenSize(displaySize.x, displaySize.y);
 
         d.show();
+    }
+
+    private static boolean showWallpaperTint(Context context) {
+        return Settings.System.getIntForUser(context.getContentResolver(),
+                Settings.System.WALLPAPER_POWER_MENU_TINT, 1, UserHandle.USER_CURRENT) == 1;
     }
 }
