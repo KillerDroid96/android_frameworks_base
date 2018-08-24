@@ -4110,13 +4110,14 @@ public final class Settings {
          *    0 - Don't show percentage
          *    1 - Show percentage outside the battery icon
          *    2 - Show percentage inside the battery icon
+         *    3 - Show percentage inside the battery icon, outside when charging
          * @hide
          */
         public static final String SHOW_BATTERY_PERCENT = "status_bar_show_battery_percent";
 
         /** @hide */
         private static final Validator SHOW_BATTERY_PERCENT_VALIDATOR =
-                new InclusiveIntegerRangeValidator(0, 2);
+                new InclusiveIntegerRangeValidator(0, 3);
 
         /**
          * Custom button brightness value for manual mode
@@ -4474,8 +4475,7 @@ public final class Settings {
          * Force an Ambient notification when a new media track is being played
          * 0 - disabled
          * 1 - show track info within normal Ambient Display notifications
-         * 2 - show track info within normal Ambient Display and also force new notifications when skipping tracks
-         * 3 - like 2, but for forced notifications use a clean layout with hidden clock
+         * 2 - show track info within normal Ambient Display and force a new Ambient clean layout when skipping tracks
          * @hide
          */
         public static final String FORCE_AMBIENT_FOR_MEDIA = "force_ambient_for_media";
@@ -8370,6 +8370,7 @@ public final class Settings {
          * 1: Display the battery an icon in landscape mode
          * 2: Display the battery as a circle
          * 3: Display the battery as a dotted circle
+         * 4: Display the battery as a square
          * 5: Display the battery as text
          * 6: Do not display the battery
          * default: 0

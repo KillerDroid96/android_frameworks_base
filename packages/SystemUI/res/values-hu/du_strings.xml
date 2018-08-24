@@ -55,6 +55,7 @@
   <!-- QS Tiles -->
   <string name="quick_settings_reboot_label">Újraindítás</string>
   <string name="quick_settings_reboot_recovery_label">Recovery</string>
+  <string name="quick_settings_reboot_bootloader_label">Bootloader</string>
   <string name="quick_settings_poweroff_label">Kikapcsolás</string>
   <string name="quick_settings_screenshot_label">Képernyőmentés</string>
   <string name="quick_settings_region_screenshot_label">Részleges képernyőmentés</string>
@@ -110,4 +111,12 @@
   <!-- Smart pixels QS tile -->
   <string name="quick_settings_smart_pixels">Intelligens pixelek</string>
   <string name="quick_settings_smart_pixels_on_power_save">Intelligens pixelek automatikus engedélyezése</string>
+  <!-- Text to use when the number in a notification info is too large
+         (greater than status_bar_notification_info_maxnum, defined in
+         values/config.xml) and must be truncated.
+         [CHAR LIMIT=4] -->
+  <!-- Recents kill app -->
+  <string name="recents_app_killed">Alkalmazás kilőve</string>
+  <string name="recents_locked_app_kill_warning">Az alkalmazás zárolva van. Kényszerített leállítás, de nem veti el ezt az alkalmazást.</string>
+  <string name="recents_kill_error_warning">Nem lehet kilőni vagy kényszerítve leállítani ezt az alkalmazást. A művelet megszakítva.</string>
 </resources>

@@ -765,6 +765,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // Behavior of Back button while in-call and screen on
     int mIncallBackBehavior;
 
+    // Whether System Navigation Keys are enabled
+    boolean mSystemNavigationKeysEnabled;
+
     Display mDisplay;
 
     private int mDisplayRotation;
@@ -1170,6 +1173,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.HOME_WAKE_SCREEN), false, this,
                     UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.Global.getUriFor(
+                    Settings.Secure.SYSTEM_NAVIGATION_KEYS_ENABLED), false, this,
+                    UserHandle.USER_ALL);
             updateSettings();
         }
 
@@ -1553,7 +1559,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private boolean isDozeMode() {
         IDreamManager dreamManager = getDreamManager();
         try {
-            if (dreamManager != null && dreamManager.isDozing()) {
+            if (dreamManager != null && dreamManager.isDreaming()) {
                 return true;
             }
         } catch (RemoteException e) {
@@ -2405,6 +2411,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     public void onTrustedChanged() {
                         mWindowManagerFuncs.notifyKeyguardTrustedChanged();
                     }
+
+                    @Override
+                    public void onShowingChanged() {
+                        mWindowManagerFuncs.onKeyguardShowingAndNotOccludedChanged();
+                    }
                 });
 
         String deviceKeyHandlerLib = mContext.getResources().getString(
@@ -2587,6 +2598,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     Settings.Secure.INCALL_BACK_BUTTON_BEHAVIOR,
                     Settings.Secure.INCALL_BACK_BUTTON_BEHAVIOR_DEFAULT,
                     UserHandle.USER_CURRENT);
+            mSystemNavigationKeysEnabled = Settings.Secure.getIntForUser(resolver,
+                    Settings.Secure.SYSTEM_NAVIGATION_KEYS_ENABLED,
+                    0, UserHandle.USER_CURRENT) == 1;
 
             // Hardware button wake
             mHomeWakeScreen = (Settings.System.getIntForUser(resolver,
@@ -6004,8 +6018,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                         changes |= FINISH_LAYOUT_REDO_LAYOUT;
                     }
                 } else if (topIsFullscreen
-                        && !mWindowManagerInternal.isStackVisible(FREEFORM_WORKSPACE_STACK_ID)
-                        && !mWindowManagerInternal.isStackVisible(DOCKED_STACK_ID)) {
+                        /*&& !mWindowManagerInternal.isStackVisible(FREEFORM_WORKSPACE_STACK_ID)
+                        && !mWindowManagerInternal.isStackVisible(DOCKED_STACK_ID)*/) {
                     if (DEBUG_LAYOUT) Slog.v(TAG, "** HIDING status bar");
                     if (mStatusBarController.setBarShowingLw(false)) {
                         changes |= FINISH_LAYOUT_REDO_LAYOUT;
@@ -6784,7 +6798,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (event.getAction() == KeyEvent.ACTION_UP) {
             if (!mAccessibilityManager.isEnabled()
                     || !mAccessibilityManager.sendFingerprintGesture(event.getKeyCode())) {
-                if (areSystemNavigationKeysEnabled()) {
+                if (mSystemNavigationKeysEnabled) {
                     sendSystemKeyToStatusBarAsync(event.getKeyCode());
                 }
             }
@@ -6938,15 +6952,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             return false;
         }
 
-        IDreamManager dreamManager = getDreamManager();
-        try {
-            if (dreamManager != null && dreamManager.isDozing()) {
-                if (event != null && isVolumeKey(event)) {
-                    return false;
-                }
+        boolean isDozing = isDozeMode();
+
+        if (isDozing) {
+            if (event != null && isVolumeKey(event)) {
+                return false;
             }
-        } catch (RemoteException e) {
-            Slog.e(TAG, "RemoteException when checking if dreaming", e);
         }
 
         // Send events to keyguard while the screen is on and it's showing.
@@ -6964,12 +6975,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         // Send events to a dozing dream even if the screen is off since the dream
         // is in control of the state of the screen.
-        try {
-            if (dreamManager != null && dreamManager.isDreaming()) {
-                return true;
-            }
-        } catch (RemoteException e) {
-            Slog.e(TAG, "RemoteException when checking if dreaming", e);
+        if (isDozing) {
+            return true;
         }
 
         // Otherwise, consume events since the user can't see what is being
@@ -8343,11 +8350,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 Settings.Global.THEATER_MODE_ON, 0) == 1;
     }
 
-    private boolean areSystemNavigationKeysEnabled() {
-        return Settings.Secure.getIntForUser(mContext.getContentResolver(),
-                Settings.Secure.SYSTEM_NAVIGATION_KEYS_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
-    }
-
     @Override
     public boolean performHapticFeedbackLw(WindowState win, int effectId, boolean always) {
         if (!mVibrator.hasVibrator()) {
@@ -8589,7 +8591,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         // We need to force system bars when the docked stack is visible, when the freeform stack
         // is visible but also when we are resizing for the transitions when docked stack
         // visibility changes.
-        mForceShowSystemBars = dockedStackVisible || freeformStackVisible || resizing;
+        mForceShowSystemBars = false; /*dockedStackVisible || freeformStackVisible || resizing;*/
         final boolean forceOpaqueStatusBar = mForceShowSystemBars && !mForceStatusBarFromKeyguard;
 
         // apply translucent bar vis flags

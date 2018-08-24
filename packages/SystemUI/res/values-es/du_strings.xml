@@ -48,13 +48,14 @@
   <string name="systemui_tuner_icon_manager_title">Administrador de iconos</string>
   <string name="systemui_tuner_lockscreen_bottom_shortcuts_title">Accesos directos en la parte inferior</string>
   <string name="lockscreen_default">Predeterminadas</string>
-  <string name="lockscreen_hidden">Nignuno</string>
+  <string name="lockscreen_hidden">Ninguno</string>
   <string name="custom_hint">Desliza desde el icono para abrir</string>
   <string name="systemui_tuner_navbar_title">Configuración predeterminada</string>
   <string name="status_bar_vpn">VPN</string>
   <!-- QS Tiles -->
   <string name="quick_settings_reboot_label">Reiniciar</string>
   <string name="quick_settings_reboot_recovery_label">Recuperación</string>
+  <string name="quick_settings_reboot_bootloader_label">Bootloader</string>
   <string name="quick_settings_poweroff_label">Apagar</string>
   <string name="quick_settings_screenshot_label">Capturar pantalla</string>
   <string name="quick_settings_region_screenshot_label">Captura de pantalla parcial</string>
@@ -110,4 +111,12 @@
   <!-- Smart pixels QS tile -->
   <string name="quick_settings_smart_pixels">Smart pixels</string>
   <string name="quick_settings_smart_pixels_on_power_save">Smart pixels arrancados automáticamente</string>
+  <!-- Text to use when the number in a notification info is too large
+         (greater than status_bar_notification_info_maxnum, defined in
+         values/config.xml) and must be truncated.
+         [CHAR LIMIT=4] -->
+  <!-- Recents kill app -->
+  <string name="recents_app_killed">Aplicación finalizada</string>
+  <string name="recents_locked_app_kill_warning">La aplicación está bloqueada. Forzada la parada pero no descartada esta aplicación.</string>
+  <string name="recents_kill_error_warning">No se puede matar o detener esta aplicación. Operación abortada.</string>
 </resources>

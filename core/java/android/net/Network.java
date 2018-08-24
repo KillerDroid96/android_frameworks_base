@@ -22,6 +22,8 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 
+import libcore.io.IoUtils;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.DatagramSocket;
@@ -83,6 +85,8 @@ public class Network implements Parcelable {
     private static final long httpKeepAliveDurationMs =
             Long.parseLong(System.getProperty("http.keepAliveDuration", "300000"));  // 5 minutes.
 
+    private java.net.Proxy mProxy = null;
+
     /**
      * @hide
      */
@@ -142,9 +146,15 @@ public class Network implements Parcelable {
             for (int i = 0; i < hostAddresses.length; i++) {
                 try {
                     Socket socket = createSocket();
-                    if (localAddress != null) socket.bind(localAddress);
-                    socket.connect(new InetSocketAddress(hostAddresses[i], port));
-                    return socket;
+                    boolean failed = true;
+                    try {
+                        if (localAddress != null) socket.bind(localAddress);
+                        socket.connect(new InetSocketAddress(hostAddresses[i], port));
+                        failed = false;
+                        return socket;
+                    } finally {
+                        if (failed) IoUtils.closeQuietly(socket);
+                    }
                 } catch (IOException e) {
                     if (i == (hostAddresses.length - 1)) throw e;
                 }
@@ -161,15 +171,27 @@ public class Network implements Parcelable {
         public Socket createSocket(InetAddress address, int port, InetAddress localAddress,
                 int localPort) throws IOException {
             Socket socket = createSocket();
-            socket.bind(new InetSocketAddress(localAddress, localPort));
-            socket.connect(new InetSocketAddress(address, port));
+            boolean failed = true;
+            try {
+                socket.bind(new InetSocketAddress(localAddress, localPort));
+                socket.connect(new InetSocketAddress(address, port));
+                failed = false;
+            } finally {
+                if (failed) IoUtils.closeQuietly(socket);
+            }
             return socket;
         }
 
         @Override
         public Socket createSocket(InetAddress host, int port) throws IOException {
             Socket socket = createSocket();
-            socket.connect(new InetSocketAddress(host, port));
+            boolean failed = true;
+            try {
+                socket.connect(new InetSocketAddress(host, port));
+                failed = false;
+            } finally {
+                if (failed) IoUtils.closeQuietly(socket);
+            }
             return socket;
         }
 
@@ -181,7 +203,13 @@ public class Network implements Parcelable {
         @Override
         public Socket createSocket() throws IOException {
             Socket socket = new Socket();
-            bindSocket(socket);
+            boolean failed = true;
+            try {
+                bindSocket(socket);
+                failed = false;
+            } finally {
+                if (failed) IoUtils.closeQuietly(socket);
+            }
             return socket;
         }
     }
@@ -238,6 +266,22 @@ public class Network implements Parcelable {
         }
     }
 
+    private java.net.Proxy getProxy() throws IOException {
+        if (mProxy == null) {
+            final ConnectivityManager cm = ConnectivityManager.getInstanceOrNull();
+            if (cm == null) {
+                throw new IOException("No ConnectivityManager yet constructed, please construct one");
+            }
+            final ProxyInfo proxyInfo = cm.getProxyForNetwork(this);
+            if (proxyInfo != null) {
+                mProxy = proxyInfo.makeProxy();
+            } else {
+                mProxy = java.net.Proxy.NO_PROXY;
+            }
+        }
+        return mProxy;
+    }
+
     /**
      * Opens the specified {@link URL} on this {@code Network}, such that all traffic will be sent
      * on this Network. The URL protocol must be {@code HTTP} or {@code HTTPS}.
@@ -248,19 +292,7 @@ public class Network implements Parcelable {
      * @see java.net.URL#openConnection()
      */
     public URLConnection openConnection(URL url) throws IOException {
-        final ConnectivityManager cm = ConnectivityManager.getInstanceOrNull();
-        if (cm == null) {
-            throw new IOException("No ConnectivityManager yet constructed, please construct one");
-        }
-        // TODO: Should this be optimized to avoid fetching the global proxy for every request?
-        final ProxyInfo proxyInfo = cm.getProxyForNetwork(this);
-        java.net.Proxy proxy = null;
-        if (proxyInfo != null) {
-            proxy = proxyInfo.makeProxy();
-        } else {
-            proxy = java.net.Proxy.NO_PROXY;
-        }
-        return openConnection(url, proxy);
+        return openConnection(url, getProxy());
     }
 
     /**
